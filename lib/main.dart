@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 const String baseUrl = 'https://ashubaba02.app.n8n.cloud/webhook';
 const String mizoChatUrl =
     '$baseUrl/20d821d7-ec90-45c2-b9a4-ebe12bcc7df1/chat';
 
+// ---------------- Website palette ----------------
 const Color kBg = Color(0xFF05060F);
 const Color kPanel = Color(0xFF141A30);
 const Color kCard = Color(0xFF0A0E1E);
@@ -67,7 +69,7 @@ class PharmaIntelApp extends StatelessWidget {
         ),
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: kPanel,
-          indicatorColor: kCyan.withOpacity(0.18),
+          indicatorColor: kCyan.withValues(alpha: 0.18),
           iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
               color: states.contains(WidgetState.selected) ? kCyan : kMuted)),
           labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
@@ -82,6 +84,7 @@ class PharmaIntelApp extends StatelessWidget {
   }
 }
 
+// Gradient text like the website logo
 class GradientText extends StatelessWidget {
   final String text;
   final double size;
@@ -106,6 +109,8 @@ class GradientText extends StatelessWidget {
     );
   }
 }
+
+// ---------------- Data layer ----------------
 
 class Report {
   final String runDate;
@@ -147,6 +152,32 @@ class Report {
   }
 }
 
+class Job {
+  final String title;
+  final String snippet;
+  final String url;
+  final String source;
+  final String age;
+
+  Job({
+    required this.title,
+    required this.snippet,
+    required this.url,
+    required this.source,
+    required this.age,
+  });
+
+  factory Job.fromJson(Map<String, dynamic> json) {
+    return Job(
+      title: json['title']?.toString() ?? '',
+      snippet: json['snippet']?.toString() ?? '',
+      url: json['url']?.toString() ?? '',
+      source: json['source']?.toString() ?? 'web',
+      age: json['age']?.toString() ?? '',
+    );
+  }
+}
+
 class Api {
   static Future<Report> fetchLatest() async {
     final res = await http.get(Uri.parse('$baseUrl/pharma/latest-report'));
@@ -162,6 +193,14 @@ class Api {
     return list.map((e) => Report.fromJson(e)).toList();
   }
 
+  static Future<List<Job>> fetchJobs() async {
+    final res = await http.get(Uri.parse('$baseUrl/pharma-intel/jobs'));
+    if (res.statusCode != 200) throw Exception('Server error ${res.statusCode}');
+    final body = jsonDecode(res.body);
+    final list = (body['items'] as List? ?? []);
+    return list.map((e) => Job.fromJson(e)).toList();
+  }
+
   static Future<void> subscribe(String email) async {
     final res = await http.post(
       Uri.parse('$baseUrl/pharma/subscribe'),
@@ -171,6 +210,8 @@ class Api {
     if (res.statusCode != 200) throw Exception('Server error ${res.statusCode}');
   }
 }
+
+// ---------------- Main screen (4 tabs + floating Mizo) ----------------
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -182,13 +223,20 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _tab = 0;
 
+  void _openMizo() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MizoChatPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
       const HomeScreen(),
       const HistoryScreen(),
+      const JobsScreen(),
       const SubscribeScreen(),
-      const MizoChatScreen(),
     ];
     return Scaffold(
       appBar: AppBar(
@@ -203,7 +251,16 @@ class _MainScreenState extends State<MainScreen> {
             colors: [Color(0x2622D3EE), Colors.transparent],
           ),
         ),
-        child: screens[_tab],
+        child: Stack(
+          children: [
+            screens[_tab],
+            Positioned(
+              right: 14,
+              bottom: 14,
+              child: FloatingMizo(onTap: _openMizo),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
@@ -211,13 +268,197 @@ class _MainScreenState extends State<MainScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.today), label: 'Today'),
           NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(icon: Icon(Icons.work_outline), label: 'Jobs'),
           NavigationDestination(icon: Icon(Icons.mail_outline), label: 'Subscribe'),
-          NavigationDestination(icon: Icon(Icons.smart_toy_outlined), label: 'Mizo'),
         ],
       ),
     );
   }
 }
+
+// ---------------- Floating Mizo robot (website design) ----------------
+
+class FloatingMizo extends StatefulWidget {
+  final VoidCallback onTap;
+  const FloatingMizo({super.key, required this.onTap});
+
+  @override
+  State<FloatingMizo> createState() => _FloatingMizoState();
+}
+
+class _FloatingMizoState extends State<FloatingMizo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bob;
+
+  @override
+  void initState() {
+    super.initState();
+    _bob = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _bob.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: AnimatedBuilder(
+        animation: _bob,
+        builder: (context, child) {
+          final dy = -7 * _bob.value;
+          return Transform.translate(offset: Offset(0, dy), child: child);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: kCyan.withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: CustomPaint(
+                size: const Size(64, 74),
+                painter: MizoRobotPainter(),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                gradient: kGrad,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: kCyan.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Text(
+                'MIZO',
+                style: TextStyle(
+                  color: Color(0xFF04121A),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Draws the little robot-medicine, same as the website Mizo on mobile
+class MizoRobotPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dark = Paint()..color = const Color(0xFF0F172A);
+
+    // antenna
+    final antenna = Paint()
+      ..color = kCyan
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(const Offset(32, 4), const Offset(32, 14), antenna);
+    final ball = Paint()
+      ..color = kMagenta
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2);
+    canvas.drawCircle(const Offset(32, 5), 5, ball);
+
+    // arms (behind body)
+    final armPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [kMagenta, kCyan],
+      ).createShader(const Rect.fromLTWH(0, 30, 8, 18));
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(0, 34, 7, 18), const Radius.circular(3.5)),
+        armPaint);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(57, 34, 7, 18), const Radius.circular(3.5)),
+        armPaint);
+
+    // legs
+    final legPaint = Paint()..color = const Color(0xFF334155);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(20, 66, 9, 8), const Radius.circular(3)),
+        legPaint);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(35, 66, 9, 8), const Radius.circular(3)),
+        legPaint);
+
+    // body: capsule, left half cyan, right half white
+    final bodyRect = const Rect.fromLTWH(4, 14, 56, 54);
+    final bodyRRect =
+        RRect.fromRectAndRadius(bodyRect, const Radius.circular(27));
+    canvas.save();
+    canvas.clipRRect(bodyRRect);
+    canvas.drawRect(
+        const Rect.fromLTWH(4, 14, 28, 54), Paint()..color = kCyan);
+    canvas.drawRect(const Rect.fromLTWH(32, 14, 28, 54),
+        Paint()..color = const Color(0xFFEEF2FF));
+    canvas.restore();
+    // body outline
+    final outline = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = kCyan.withValues(alpha: 0.55);
+    canvas.drawRRect(bodyRRect, outline);
+
+    // eyes
+    canvas.drawCircle(const Offset(21, 36), 5, dark);
+    canvas.drawCircle(const Offset(43, 36), 5, dark);
+    final sparkle = Paint()..color = const Color(0xFFA5F3FC);
+    canvas.drawCircle(const Offset(19.5, 34.5), 1.8, sparkle);
+    canvas.drawCircle(const Offset(41.5, 34.5), 1.8, sparkle);
+
+    // smile
+    final smile = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(const Rect.fromLTWH(24, 42, 16, 10), 0.15, 3.14 - 0.3,
+        false, smile);
+
+    // vent lines
+    final vent = Paint()..color = const Color(0x590F172A);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(24, 58, 16, 2.5), const Radius.circular(1.2)),
+        vent);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(24, 62, 16, 2.5), const Radius.circular(1.2)),
+        vent);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ---------------- Shared widgets ----------------
 
 Widget _sectionTitle(String title) => Padding(
       padding: const EdgeInsets.only(top: 20, bottom: 8),
@@ -258,6 +499,7 @@ class ReportView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,7 +553,7 @@ class ReportView extends StatelessWidget {
           _section('Key Findings', report.keyFindings),
           _section('Market Signals', report.marketSignals, itemKey: 'signal'),
           _section('Next Steps', report.nextSteps, itemKey: 'step'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 90),
           const Center(
             child: Text(
               'Owned and maintained by Ashutosh Tripathy\nResearch-support information only. Not medical advice.',
@@ -325,96 +567,384 @@ class ReportView extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Report>(
-      future: Api.fetchLatest(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 12),
-              Text('Scanning global sources...', style: TextStyle(color: kMuted, fontSize: 13)),
-            ]),
-          );
-        }
-        if (snap.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text('Could not load report.\n${snap.error}',
-                  textAlign: TextAlign.center, style: const TextStyle(color: kMuted)),
-            ),
-          );
-        }
-        return ReportView(report: snap.data!);
-      },
-    );
-  }
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({super.key});
+class _HomeScreenState extends State<HomeScreen> {
+  late Future<Report> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = Api.fetchLatest();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _future = Api.fetchLatest());
+    await _future;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Report>>(
-      future: Api.fetchReports(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.hasError) {
-          return Center(
-              child: Text('Could not load history.\n${snap.error}',
-                  style: const TextStyle(color: kMuted), textAlign: TextAlign.center));
-        }
-        final reports = snap.data!;
-        if (reports.isEmpty) {
-          return const Center(child: Text('No reports yet.', style: TextStyle(color: kMuted)));
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: reports.length,
-          itemBuilder: (context, i) {
-            final r = reports[i];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                title: Text(r.runDate, style: const TextStyle(color: kText, fontWeight: FontWeight.w600)),
-                subtitle: Text(r.summary,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: kMuted, fontSize: 13)),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: kLine),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text('${r.overallScore}/5', style: const TextStyle(color: kCyan, fontSize: 12)),
+    return RefreshIndicator(
+      color: kCyan,
+      backgroundColor: kPanel,
+      onRefresh: _reload,
+      child: FutureBuilder<Report>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 240),
+                Center(child: CircularProgressIndicator()),
+                SizedBox(height: 12),
+                Center(
+                  child: Text('Scanning global sources...',
+                      style: TextStyle(color: kMuted, fontSize: 13)),
                 ),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => Scaffold(
-                      appBar: AppBar(title: Text(r.runDate)),
-                      body: Container(color: kBg, child: ReportView(report: r)),
-                    ),
-                  ),
-                ),
-              ),
+              ],
             );
-          },
-        );
-      },
+          }
+          if (snap.hasError) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const SizedBox(height: 200),
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('Could not load report.\n${snap.error}\n\nPull down to retry.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: kMuted)),
+                  ),
+                ),
+              ],
+            );
+          }
+          return ReportView(report: snap.data!);
+        },
+      ),
     );
   }
 }
+
+class HistoryScreen extends StatefulWidget {
+  const HistoryScreen({super.key});
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  late Future<List<Report>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = Api.fetchReports();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _future = Api.fetchReports());
+    await _future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: kCyan,
+      backgroundColor: kPanel,
+      onRefresh: _reload,
+      child: FutureBuilder<List<Report>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 240),
+                Center(child: CircularProgressIndicator()),
+              ],
+            );
+          }
+          if (snap.hasError) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const SizedBox(height: 200),
+                Center(
+                  child: Text('Could not load history.\n${snap.error}\n\nPull down to retry.',
+                      style: const TextStyle(color: kMuted),
+                      textAlign: TextAlign.center),
+                ),
+              ],
+            );
+          }
+          final reports = snap.data!;
+          if (reports.isEmpty) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 200),
+                Center(child: Text('No reports yet.', style: TextStyle(color: kMuted))),
+              ],
+            );
+          }
+          return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            itemCount: reports.length,
+            itemBuilder: (context, i) {
+              final r = reports[i];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  title: Text(r.runDate,
+                      style: const TextStyle(color: kText, fontWeight: FontWeight.w600)),
+                  subtitle: Text(r.summary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: kMuted, fontSize: 13)),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: kLine),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('${r.overallScore}/5',
+                        style: const TextStyle(color: kCyan, fontSize: 12)),
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: Text(r.runDate)),
+                        body: Container(color: kBg, child: ReportView(report: r)),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ---------------- Jobs tab ----------------
+
+class JobsScreen extends StatefulWidget {
+  const JobsScreen({super.key});
+
+  @override
+  State<JobsScreen> createState() => _JobsScreenState();
+}
+
+class _JobsScreenState extends State<JobsScreen> {
+  late Future<List<Job>> _future;
+
+  static const List<String> howToApply = [
+    'Open the job link and read the full advertisement on the company\'s official website.',
+    'Check you fit: education (B.Pharm / M.Pharm / B.Sc etc.), experience, and location.',
+    'Prepare a simple 1-page resume with your contact details, education and any lab / internship experience.',
+    'Apply only through the official company careers page or the apply link in the ad — never pay money to get a job.',
+    'Keep your email and phone active — companies usually contact shortlisted candidates within 1–3 weeks.',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _future = Api.fetchJobs();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _future = Api.fetchJobs());
+    await _future;
+  }
+
+  Future<void> _openJob(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the job link.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: kCyan,
+      backgroundColor: kPanel,
+      onRefresh: _reload,
+      child: FutureBuilder<List<Job>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 220),
+                Center(child: CircularProgressIndicator()),
+                SizedBox(height: 12),
+                Center(
+                  child: Text('Finding the latest pharma jobs...',
+                      style: TextStyle(color: kMuted, fontSize: 13)),
+                ),
+              ],
+            );
+          }
+          if (snap.hasError) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const SizedBox(height: 200),
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('Could not load job posts.\n${snap.error}\n\nPull down to retry.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: kMuted)),
+                  ),
+                ),
+              ],
+            );
+          }
+          final jobs = snap.data!;
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            children: [
+              if (jobs.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 120, bottom: 24),
+                  child: Center(
+                    child: Text('No fresh job posts found right now — check back soon.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: kMuted)),
+                  ),
+                )
+              else
+                ...jobs.map((job) => Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => _openJob(job.url),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(job.title,
+                                        style: const TextStyle(
+                                            color: Color(0xFFA5F3FC),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14.5,
+                                            height: 1.4)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.open_in_new, size: 16, color: kCyan),
+                                ],
+                              ),
+                              if (job.snippet.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(job.snippet,
+                                    style: const TextStyle(
+                                        color: kMuted, fontSize: 13, height: 1.5)),
+                              ],
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: kLine),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(job.source,
+                                        style: const TextStyle(color: kCyan, fontSize: 11)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  if (job.age.isNotEmpty)
+                                    Text(job.age,
+                                        style: const TextStyle(
+                                            color: Color(0xFF64748B), fontSize: 11)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: kPanel.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: kLine),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('HOW TO APPLY — SIMPLE STEPS',
+                        style: TextStyle(
+                            fontSize: 12,
+                            letterSpacing: 1.5,
+                            fontWeight: FontWeight.w700,
+                            color: kCyan)),
+                    const SizedBox(height: 10),
+                    ...howToApply.asMap().entries.map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${e.key + 1}. ',
+                                  style: const TextStyle(
+                                      color: kMagenta,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13)),
+                              Expanded(
+                                child: Text(e.value,
+                                    style: const TextStyle(
+                                        color: Color(0xFFCBD5E1),
+                                        fontSize: 13,
+                                        height: 1.5)),
+                              ),
+                            ],
+                          ),
+                        )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 90),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ---------------- Mizo chat (opened by the floating robot) ----------------
 
 class MizoMessage {
   final String text;
@@ -422,38 +952,14 @@ class MizoMessage {
   MizoMessage(this.text, this.fromUser);
 }
 
-class MizoAvatar extends StatelessWidget {
-  final double size;
-  const MizoAvatar({super.key, this.size = 34});
+class MizoChatPage extends StatefulWidget {
+  const MizoChatPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [kCyan, kCyan, Color(0xFFEEF2FF), Color(0xFFEEF2FF)],
-          stops: [0, 0.5, 0.5, 1],
-        ),
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: kCyan.withOpacity(0.5), blurRadius: 12)],
-      ),
-      child: const Icon(Icons.smart_toy, size: 18, color: Color(0xFF0F172A)),
-    );
-  }
+  State<MizoChatPage> createState() => _MizoChatPageState();
 }
 
-class MizoChatScreen extends StatefulWidget {
-  const MizoChatScreen({super.key});
-
-  @override
-  State<MizoChatScreen> createState() => _MizoChatScreenState();
-}
-
-class _MizoChatScreenState extends State<MizoChatScreen> {
+class _MizoChatPageState extends State<MizoChatPage> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   final List<MizoMessage> _messages = [
@@ -531,111 +1037,154 @@ class _MizoChatScreenState extends State<MizoChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: const BoxDecoration(
-            color: kPanel,
-            border: Border(bottom: BorderSide(color: kLine)),
-          ),
-          child: const Row(
-            children: [
-              MizoAvatar(),
-              SizedBox(width: 10),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                GradientText('MIZO', size: 15, letterSpacing: 1.5),
-                Text('Your friendly pharma guide',
-                    style: TextStyle(color: kMuted, fontSize: 11)),
-              ]),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            controller: _scroll,
-            padding: const EdgeInsets.all(12),
-            itemCount: _messages.length,
-            itemBuilder: (context, i) {
-              final m = _messages[i];
-              return Align(
-                alignment: m.fromUser ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.82,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: m.fromUser
-                        ? const LinearGradient(colors: [Color(0xFF0891B2), Color(0xFF0E7490)])
-                        : null,
-                    color: m.fromUser ? null : kPanel,
-                    border: m.fromUser ? null : Border.all(color: kLine),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(14),
-                      topRight: const Radius.circular(14),
-                      bottomLeft: Radius.circular(m.fromUser ? 14 : 4),
-                      bottomRight: Radius.circular(m.fromUser ? 4 : 14),
-                    ),
-                  ),
-                  child: Text(m.text,
-                      style: const TextStyle(color: kText, fontSize: 14.5, height: 1.5)),
-                ),
-              );
-            },
-          ),
-        ),
-        if (_sending)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 6),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-              SizedBox(width: 8),
-              Text('Mizo is thinking...',
-                  style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: kMuted)),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 28,
+              height: 32,
+              child: CustomPaint(painter: _MiniMizoPainter()),
+            ),
+            SizedBox(width: 8),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              GradientText('MIZO', size: 15, letterSpacing: 1.5),
+              Text('Your friendly pharma guide',
+                  style: TextStyle(color: kMuted, fontSize: 11)),
             ]),
-          ),
-        SafeArea(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            decoration: const BoxDecoration(
-              color: kPanel,
-              border: Border(top: BorderSide(color: kLine)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _send(),
-                    style: const TextStyle(color: kText),
-                    decoration: const InputDecoration(
-                      hintText: 'Ask Mizo anything...',
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: kGrad,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: IconButton(
-                    onPressed: _sending ? null : _send,
-                    icon: const Icon(Icons.send, color: Color(0xFF04121A)),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
-      ],
+      ),
+      body: Container(
+        color: kBg,
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.all(12),
+                itemCount: _messages.length,
+                itemBuilder: (context, i) {
+                  final m = _messages[i];
+                  return Align(
+                    alignment: m.fromUser ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.82,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: m.fromUser
+                            ? const LinearGradient(colors: [Color(0xFF0891B2), Color(0xFF0E7490)])
+                            : null,
+                        color: m.fromUser ? null : kPanel,
+                        border: m.fromUser ? null : Border.all(color: kLine),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(14),
+                          topRight: const Radius.circular(14),
+                          bottomLeft: Radius.circular(m.fromUser ? 14 : 4),
+                          bottomRight: Radius.circular(m.fromUser ? 4 : 14),
+                        ),
+                      ),
+                      child: Text(m.text,
+                          style: const TextStyle(color: kText, fontSize: 14.5, height: 1.5)),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (_sending)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 8),
+                  Text('Mizo is thinking...',
+                      style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: kMuted)),
+                ]),
+              ),
+            SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                decoration: const BoxDecoration(
+                  color: kPanel,
+                  border: Border(top: BorderSide(color: kLine)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        style: const TextStyle(color: kText),
+                        decoration: const InputDecoration(
+                          hintText: 'Ask Mizo anything...',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: kGrad,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        onPressed: _sending ? null : _send,
+                        icon: const Icon(Icons.send, color: Color(0xFF04121A)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+// Tiny Mizo face for the chat page header
+class _MiniMizoPainter extends CustomPainter {
+  const _MiniMizoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height * 0.86;
+    final rect = Rect.fromLTWH(0, size.height * 0.14, w, h);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(w / 2));
+    canvas.save();
+    canvas.clipRRect(rrect);
+    canvas.drawRect(Rect.fromLTWH(0, rect.top, w / 2, h), Paint()..color = kCyan);
+    canvas.drawRect(Rect.fromLTWH(w / 2, rect.top, w / 2, h),
+        Paint()..color = const Color(0xFFEEF2FF));
+    canvas.restore();
+    final dark = Paint()..color = const Color(0xFF0F172A);
+    canvas.drawCircle(Offset(w * 0.32, rect.top + h * 0.42), 3, dark);
+    canvas.drawCircle(Offset(w * 0.68, rect.top + h * 0.42), 3, dark);
+    final smile = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(Rect.fromLTWH(w * 0.32, rect.top + h * 0.52, w * 0.36, h * 0.24),
+        0.2, 3.14 - 0.4, false, smile);
+    final antenna = Paint()
+      ..color = kCyan
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(w / 2, rect.top), Offset(w / 2, 2), antenna);
+    canvas.drawCircle(Offset(w / 2, 2), 2, Paint()..color = kMagenta);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class SubscribeScreen extends StatefulWidget {
@@ -691,7 +1240,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: kPanel.withOpacity(0.55),
+              color: kPanel.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: kLine),
             ),
