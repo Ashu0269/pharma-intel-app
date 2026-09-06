@@ -1,7 +1,7 @@
 name: pharma_intel
 description: Pharma Intelligence daily reports app
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -10,6 +10,17 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
+
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.3
+  image: ^4.2.0
+
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#05060F"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
 
 flutter:
   uses-material-design: true
