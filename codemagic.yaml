@@ -9,6 +9,10 @@ workflows:
         script: |
           flutter create . --org com.pharmaintel --project-name pharma_intel --platforms android
           flutter pub get
+      - name: Generate app icon
+        script: |
+          dart run tool/generate_icon.dart
+          dart run flutter_launcher_icons
       - name: Build APK
         script: |
           flutter build apk --release
