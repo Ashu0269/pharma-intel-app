@@ -1,0 +1,16 @@
+workflows:
+  default-workflow:
+    name: Default Workflow
+    max_build_duration: 60
+    environment:
+      flutter: stable
+    scripts:
+      - name: Generate project files
+        script: |
+          flutter create . --org com.pharmaintel --project-name pharma_intel
+          flutter pub get
+      - name: Build APK
+        script: |
+          flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
