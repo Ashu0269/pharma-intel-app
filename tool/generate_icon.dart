@@ -6,6 +6,9 @@ import 'package:image/image.dart';
 // cyan/magenta capsule robot face from the Pharma Intelligence website.
 void main() {
   const s = 1024;
+  const w = 760, h = 340, r = h ~/ 2;
+  const x0 = (s - w) ~/ 2, y0 = (s - h) ~/ 2;
+
   final img = Image(width: s, height: s);
   fill(img, color: ColorRgb8(5, 6, 15)); // navy bg
 
@@ -14,11 +17,7 @@ void main() {
   final dark = ColorRgb8(15, 23, 42);
   final sparkleHi = ColorRgb8(165, 243, 252);
 
-  // Capsule: 760x340, centered
-  const w = 760, h = 340, r = h ~/ 2;
-  final x0 = (s - w) ~/ 2, y0 = (s - h) ~/ 2;
-
-  // left half cyan, right half magenta
+  // Capsule: left half cyan, right half magenta
   fillRect(img, x1: x0, y1: y0, x2: x0 + w ~/ 2, y2: y0 + h, color: cyan);
   fillRect(img, x1: x0 + w ~/ 2, y1: y0, x2: x0 + w, y2: y0 + h, color: magenta);
   // round the two ends
@@ -42,7 +41,8 @@ void main() {
   corner(x0 + w, y0 + h, -1, -1);
 
   // Robot face on the cyan half
-  const eyeR = 26, eyeY = y0 + r - 50;
+  const eyeR = 26;
+  const eyeY = y0 + r - 50;
   fillCircle(img, x: x0 + 140, y: eyeY, radius: eyeR, color: dark);
   fillCircle(img, x: x0 + 300, y: eyeY, radius: eyeR, color: dark);
   fillCircle(img, x: x0 + 132, y: eyeY - 8, radius: 9, color: sparkleHi);
